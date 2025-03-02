@@ -1,8 +1,6 @@
 import re
 
 from pyspark.sql import SparkSession, functions as F, types as T
-from pyspark.ml.classification import LogisticRegression
-from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.feature import HashingTF, IDF, RegexTokenizer
 
 from consts import (
@@ -10,16 +8,13 @@ from consts import (
     CUSTOM_WORDS,
     PARQUET_PATH,
     LABELS_CSV,
-    SPARK_APP,
     TRAIN_DF_PATH,
     TEST_DF_PATH,
+    SPARK_APP,
     DF_PATH,
-    MODEL_PATH
 )
 
 STOPWORDS = list(set(NLTK_WORDS+CUSTOM_WORDS))
-LR = LogisticRegression(featuresCol = 'features', labelCol = 'issue_label', family = 'multinomial')
-EVALUATOR = MulticlassClassificationEvaluator(labelCol='issue_label', predictionCol='prediction')
 
 def labels_df(csv_df):
     # drop na from series
@@ -28,17 +23,17 @@ def labels_df(csv_df):
     csv_df = csv_df.withColumn('label', F.when(F.array_contains(F.split(F.col('contents'), '; '), 'democratic'), 0.0).when(F.array_contains(F.split(F.col('contents'), '; '), 'republican'), 1.0).when(F.array_contains(F.split(F.col('contents'), '; '), 'independent'), 2.0).otherwise(3.0))
     csv_df = csv_df.select('series', F.col('contents').alias('metadata'), F.col('label').alias('issue_label'))
     # remove xref from series
-    csv_df = csv_df.filter("series <> 'xref' AND series <> '(no report.)'")
+    csv_df = csv_df.filter(~F.col('metadata').isin('xref', '(no report.)'))
     return csv_df
-
-def list_to_string(ls):
-    return ''.join(ls)
 
 def clean_para(paragraph):
     sent = ''
+
     for word in paragraph.split(','):
+        word = word.strip()
         if word.strip():
             sent += word.strip() + ", "
+    
     return sent
 
 def feature_extraction(df, inputCol): 
@@ -48,36 +43,22 @@ def feature_extraction(df, inputCol):
     return idfModel.transform(hash_data)
 
 def preprocess(content):
-    if content.strip():
-        # Remove non-alphabetical characters except commas, spaces, and \n\n
-        content = re.sub(r'[^\w,\s\n]', ' ', content)
-        # Remove extra spaces around commas
-        content = re.sub(r'\s*,\s*', ',', content).strip()
-        # Remove extra spaces between words
-        content = re.sub(r'\s+', ' ', content).strip()
-        # remove words upto 3 characters
-        content = re.sub(r'\b\w{1,3}\b', '', content).strip()
-        # filter out stopwords
-        filtered_words = [word for word in content.split() if word not in STOPWORDS]
-        # Remove empty strings from the list
-        filtered_words[:] = [word.strip() for word in filtered_words if word]
-        return ' '.join(word.lower() for word in filtered_words)
+    if not content.strip():
+        return content
     
-    return content
-
-def train_classifier():
-    # load train and test datasets
-    train = spark.read.csv(TRAIN_DF_PATH, header=True, inferSchema=True)
-    test = spark.read.csv(TEST_DF_PATH, header=True, inferSchema=True)
-    # train Logistic Regression classifier
-    model = LR.fit(train)
-    # save model
-    model.write().overwrite().save(MODEL_PATH)
-    # make prediction
-    predictions = model.transform(test)
-    # evaluate performance
-    accuracy, f1 = EVALUATOR.evaluate(predictions, {EVALUATOR.metricName: "accuracy"}), EVALUATOR.evaluate(predictions, {EVALUATOR.metricName: "f1"})
-    print(f"accuracy: {accuracy}\nf1 score: {f1}")
+    # Remove non-alphabetical characters except commas, spaces, and \n\n
+    content = re.sub(r'[^\w,\s\n]', ' ', content)
+    # Remove extra spaces around commas
+    content = re.sub(r'\s*,\s*', ',', content).strip()
+    # Remove extra spaces between words
+    content = re.sub(r'\s+', ' ', content).strip()
+    # remove words upto 3 characters
+    content = re.sub(r'\b\w{1,3}\b', '', content).strip()
+    # filter out stopwords
+    filtered_words = [word for word in content.split() if word not in STOPWORDS]
+    # Remove empty strings from the list
+    filtered_words[:] = [word.strip() for word in filtered_words if word]
+    return ' '.join(word.lower() for word in filtered_words)
 
 def perform_split():
     to_split_df = spark.read.csv(DF_PATH, header=True, inferSchema=True)
@@ -91,18 +72,15 @@ def perform_split():
     test_df.toPandas().to_csv(TEST_DF_PATH, header=True, index=False)
 
 def create_dataset(orignal_df):
-    # text colun to string
-    text_to_string_udf = F.udf(list_to_string, T.StringType())
-    final_df = orignal_df.withColumn('text_as_string', text_to_string_udf(F.col('text')))
     # split text column
-    final_df = final_df.withColumn('paragraphs', F.split(F.col('text_as_string'), "\n\n"))
+    final_df = orignal_df.withColumn('paragraphs', F.split(F.col('text'), "\n\n"))
     # each paragraph as row
     final_df = final_df.withColumn('rows', F.explode(F.col('paragraphs')))
     # clean
     clean_issues_udf = F.udf(preprocess, T.StringType())
     final_df = final_df.withColumn("cleaned_paragraphs", clean_issues_udf(F.col('rows')))
     # remove not required columns
-    final_df = final_df.drop('text_as_string', 'paragraphs', 'rows')
+    final_df = final_df.drop('text', 'paragraphs', 'rows')
     # remove empty rows and rows with only one word
     final_df = final_df.filter((F.col('cleaned_paragraphs').isNotNull()) & (F.size(F.split(F.col('cleaned_paragraphs'), "\\s+"))>1))
     # final preprocessing
@@ -119,7 +97,7 @@ if __name__ == '__main__':
     spark = SparkSession.builder.appName(SPARK_APP).getOrCreate()
     # read the parquet
     df = spark.read.parquet(PARQUET_PATH)
-    df = df.filter(F.year('date')==1869).groupBy('series', 'issue').agg(F.collect_list('text').alias('text'))
+    df = df.filter(F.year('date')==1869).select('series', 'issue', 'date', 'text')
     # read labels as csv file
     csv_df = spark.read.csv(LABELS_CSV, header=True, inferSchema=True).select('contents', 'series')
     csv_df = labels_df(csv_df)
@@ -128,5 +106,3 @@ if __name__ == '__main__':
     dataset = create_dataset(df)
     # train-test split
     perform_split()
-    # TODO: uncomment if you require training the model
-    # train_classifier()
