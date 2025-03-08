@@ -3,6 +3,7 @@ import re
 from pyspark.sql import SparkSession, functions as F, types as T
 from pyspark.ml.feature import HashingTF, IDF, RegexTokenizer
 
+from visualization import value_plots
 from consts import (
     NLTK_WORDS, 
     CUSTOM_WORDS,
@@ -67,6 +68,9 @@ def perform_split():
     train_df, test_df = to_split_df.join(series_train, on='series', how='inner'), to_split_df.join(series_test, on='series', how='inner')
     # train on only democrat and republican
     train_df = train_df.filter(F.col('issue_label').isin(0, 1))
+    # visualise value counts
+    value_plots(values_df=train_df.groupby('issue_label').count().toPandas(), fig_name='train_value_counts.png')
+    value_plots(values_df=test_df.groupby('issue_label').count().toPandas(), fig_name='test_value_counts.png')
     # save as pandaas dataframe
     train_df.toPandas().to_csv(TRAIN_DF_PATH, header=True, index=False)
     test_df.toPandas().to_csv(TEST_DF_PATH, header=True, index=False)

@@ -1,8 +1,6 @@
-import seaborn as sns
-import matplotlib.pyplot as plt
-
 from pyspark.sql import SparkSession, functions as F, Window
 
+from visualization import plot_hist
 from consts import (
     SPARK_APP,
     PREDICTIONS_DF_PATH,
@@ -10,32 +8,6 @@ from consts import (
     REP_PATH,
     HIST_FOLDER
 )
-
-def plot_hist(probabilities, fig_name, title):
-    """
-    histogram for posterior probabilities using seaborn
-    :param probabilities: Pandas Series representing posterior probabilities
-    """
-    
-    # set plot size
-    plt.figure(figsize=(10, 6))
-    # plot histogram
-    sns.histplot(probabilities, bins=20, kde=True, color="green", alpha=0.7, edgecolor="black")
-    # add vertical lines
-    plt.axvline(x=0.7, color="blue", linestyle="--", linewidth=2, label="p>0.7")
-    plt.axvline(x=0.4, color="red", linestyle="--", linewidth=2, label="p<0.4")
-    # title
-    plt.title(title, fontsize=16)
-    # axis labels
-    plt.xlabel("Probability", fontsize=14)
-    plt.ylabel("Frequency", fontsize=14)
-    # formatting
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
-    # show plot
-    plt.show()
-    # save plot
-    plt.savefig(fig_name)
 
 def series_hist(probability_series):
     """
