@@ -32,8 +32,8 @@ def clean_para(paragraph):
 
     for word in paragraph.split(','):
         word = word.strip()
-        if word.strip():
-            sent += word.strip() + ", "
+        if word:
+            sent += word + ", "
     
     return sent
 
