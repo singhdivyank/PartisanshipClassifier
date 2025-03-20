@@ -4,22 +4,52 @@ import seaborn as sns
 
 from sklearn.metrics import roc_curve, precision_recall_curve, confusion_matrix, ConfusionMatrixDisplay
 
-def value_plots(values_df, fig_name):
+def plot_valuecounts(values_df, fig_name):
     """
-    value counts of issue labels
+    single bar plot
     """
     
     plt.figure(figsize=(8, 5))
+    
     bars = plt.bar(values_df["issue_label"].astype(str), values_df["count"], color='skyblue')
+    
     plt.xlabel("Issue Labels")
     plt.ylabel("Count")
     plt.title("Value Counts of Issue Labels")
     plt.xticks(rotation=45)
+    
     for bar in bars:
         height = bar.get_height()
         plt.text(bar.get_x() + bar.get_width()/2.0, height, str(height), ha='center', va='bottom')
+    
+    plt.savefig(fig_name)
+    print(f"saved value plots to :: {fig_name}")
 
-    plt.show()
+def plot_values(values_df, index_col, cat1, cat2, cat1_label, cat2_label, fig_name):
+    """
+    stacked bar plot
+    """
+
+    plt.figure(figsize=(8, 5))
+    
+    bar_width, index = 0.35, values_df[index_col]
+    bars_dem = plt.bar(index - bar_width/2, values_df[cat1], bar_width, label=cat1_label, color='blue') 
+    bars_rep = plt.bar(index + bar_width/2, values_df[cat2], bar_width, label=cat2_label, color='red')
+    
+    plt.xlabel("Majority Vote")
+    plt.ylabel("Count")
+    plt.title("Count of Majority Votes")
+    plt.xticks(index)
+    plt.legend()
+
+    for bar in bars_dem:
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2.0, height+10, str(height), ha='center', va='bottom')
+    
+    for bar in bars_rep:
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2.0, height+10, str(height), ha='center', va='bottom')
+    
     plt.savefig(fig_name)
     print(f"saved value plots to :: {fig_name}")
 
@@ -31,10 +61,13 @@ def plot_hist(probabilities, fig_name, title):
     
     # set plot size
     plt.figure(figsize=(10, 6))
+    
     # plot histogram
     sns.histplot(probabilities, bins=20, kde=True, color="green", alpha=0.7, edgecolor="black")
-    # add vertical lines
+    
+    # add vertical line for democrat partisanship
     plt.axvline(x=0.7, color="blue", linestyle="--", linewidth=2, label="p>0.7")
+    # add vertical line for republican partisanship
     plt.axvline(x=0.4, color="red", linestyle="--", linewidth=2, label="p<0.4")
     # title
     plt.title(title, fontsize=16)
@@ -44,11 +77,9 @@ def plot_hist(probabilities, fig_name, title):
     # formatting
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
-    # show plot
-    plt.show()
+    
     # save plot
     plt.savefig(fig_name)
-
     print(f"saved histogram {fig_name}")
 
 

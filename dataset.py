@@ -3,7 +3,7 @@ import re
 from pyspark.sql import SparkSession, functions as F, types as T
 from pyspark.ml.feature import HashingTF, IDF, RegexTokenizer
 
-from visualization import value_plots
+from visualization import plot_valuecounts
 from consts import (
     NLTK_WORDS, 
     CUSTOM_WORDS,
@@ -13,6 +13,7 @@ from consts import (
     TEST_DF_PATH,
     SPARK_APP,
     DF_PATH,
+    METADATA_PATH
 )
 
 STOPWORDS = list(set(NLTK_WORDS+CUSTOM_WORDS))
@@ -25,6 +26,8 @@ def labels_df(csv_df):
     csv_df = csv_df.select('series', F.col('contents').alias('metadata'), F.col('label').alias('issue_label'))
     # remove xref from series
     csv_df = csv_df.filter(~F.col('metadata').isin('xref', '(no report.)'))
+    # save as csv
+    csv_df.toPandas().to_csv(METADATA_PATH, header=True, index=False)
     return csv_df
 
 def clean_para(paragraph):
@@ -69,8 +72,8 @@ def perform_split():
     # train on only democrat and republican
     train_df = train_df.filter(F.col('issue_label').isin(0, 1))
     # visualise value counts
-    value_plots(values_df=train_df.groupby('issue_label').count().toPandas(), fig_name='train_value_counts.png')
-    value_plots(values_df=test_df.groupby('issue_label').count().toPandas(), fig_name='test_value_counts.png')
+    plot_valuecounts(values_df=train_df.groupby('issue_label').count().toPandas(), fig_name='train_value_counts.png')
+    plot_valuecounts(values_df=test_df.groupby('issue_label').count().toPandas(), fig_name='test_value_counts.png')
     # save as pandaas dataframe
     train_df.toPandas().to_csv(TRAIN_DF_PATH, header=True, index=False)
     test_df.toPandas().to_csv(TEST_DF_PATH, header=True, index=False)

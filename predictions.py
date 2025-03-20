@@ -21,12 +21,6 @@ BIN_CLASS_EVALUATOR = BinaryClassificationEvaluator(labelCol='issue_label', rawP
 def vector_to_array(vector):
     return vector.toArray().tolist()
 
-def modify_predictions(predictions):
-    # add additional columns for democrat and republican probabilities
-    predictions = predictions.withColumn('probability_array', vector_to_array(predictions['probability'])).withColumn('max_prob', F.array_max('probability_array')).withColumn('democrat_probability', F.col("probability_array").getItem(0)).withColumn('republican_probability', F.col("probability_array").getItem(1))
-    predictions = predictions.drop(F.col('probability_array')).orderBy(F.desc('max_prob')).filter(F.col('prediction') == F.col('issue_label'))
-    return predictions
-
 def train_classifier():
     # load train dataset
     train_df = spark.read.csv(TRAIN_DF_PATH, header=True, inferSchema=True)
@@ -78,8 +72,8 @@ def evaluation():
 def obtain_predictions(for_predictions):
     loaded_classifier = LogisticRegressionModel.load(MODEL_PATH)
     predictions_df = loaded_classifier.transform(for_predictions)
-    # modify predictions dataframe
-    predictions = modify_predictions(predictions=predictions_df)
+    # add additional columns for democrat and republican probabilities
+    predictions = predictions_df.withColumn('probability_array', vector_to_array(predictions['probability'])).withColumn('max_prob', F.array_max('probability_array')).withColumn('democrat_probability', F.col("probability_array").getItem(0)).withColumn('republican_probability', F.col("probability_array").getItem(1)).drop(F.col('probability_array'))
     # save as CSV file
     predictions.toPandas().to_csv(PREDICTIONS_DF_PATH, header=True, index=False)
     return predictions

@@ -26,7 +26,7 @@ def identify_series(series_df):
     """
 
     dem_idx, rep_idx = [], []
-    # total number of series in the dataframe
+    # obtain all unique series
     unique_series = series_df['series'].unique()
     # iterate over each series
     for _, series in enumerate(unique_series):
